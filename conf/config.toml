@@ -1,0 +1,31 @@
+[server]
+# 监听地址:127.0.0.1/0.0.0.0
+host = "0.0.0.0"
+# 端口号: 默认53353
+port = 53
+# DNS ttl
+ttl = 300
+
+[ping]
+# cloudflare ip端口号, 默认443
+port = 443
+# ping 线程数量
+workers = 4
+# ping 多少次
+times = 5
+# ping 超时时间,单位毫秒
+timeout = 180
+# ping 同一个ip的间隔, 单位毫秒
+interval = 10
+# 每隔多少秒重新测速, 默认跑完一轮测速之后, 等待7200秒后会重新进行测速
+cycle_interval = 7200
+
+# 上游DNS服务配置, 仅支持UDP协议。
+[upstream]
+host = "1.1.1.1"
+port = 53
+
+
+[resource]
+ipv4_filepath = "conf/ip.txt"
+domain_filepath = "conf/domain.txt"
