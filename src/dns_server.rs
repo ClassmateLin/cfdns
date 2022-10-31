@@ -53,16 +53,9 @@ impl DnsServer {
         udp_socket.send_to(qbuf, self.upstream_sock_addr).await?;
 
         let (len, _addr) = udp_socket.recv_from(&mut rbuf).await?;
+        
         rbuf.resize(len, 0);
-        let udp_addr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
-        let udp_socket = UdpSocket::bind(udp_addr).await?;
 
-        let mut rbuf = BytesMut::with_capacity(1024);
-        rbuf.resize(1024, 0);
-        udp_socket.send_to(qbuf, self.upstream_sock_addr).await?;
-
-        let (len, _addr) = udp_socket.recv_from(&mut rbuf).await?;
-        rbuf.resize(len, 0);
         Ok(rbuf.freeze())
     }
 
