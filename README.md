@@ -63,3 +63,7 @@
 ## 其他
 
 - 可放在路由器中运行, 将上游服务器设置为dnsmasq/smartdns。
+
+## todo
+
+- []填域名不方便, 改为先请求上游DNS服务器，解析到ip地址范围在CloudflareSpeed的地址段内，再返回最快的ip。
