@@ -1,7 +1,5 @@
 [server]
-# 监听地址:127.0.0.1/0.0.0.0
 host = "0.0.0.0"
-# 端口号: 默认53353
 port = 53
 # DNS ttl
 ttl = 300
@@ -28,4 +26,3 @@ port = 53
 
 [resource]
 ipv4_filepath = "conf/ip.txt"
-domain_filepath = "conf/domain.txt"

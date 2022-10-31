@@ -32,7 +32,6 @@ pub struct UpstreamConf {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ResourceConf {
     pub ipv4_filepath: String,
-    pub domain_filepath: String,
 }
 
 // 配置
