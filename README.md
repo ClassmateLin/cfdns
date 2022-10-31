@@ -67,8 +67,8 @@
 
 ## 其他项目
 
-[抖音视频批量下载](https://github.com/ClassmateLin/douyin-downloader)
-[丘大叔签到](https://github.com/ClassmateLin/uncle-qiu-sign-in)
-[JD东东农场](https://github.com/ClassmateLin/jd-farm)
-[JD签到领京豆](https://github.com/ClassmateLin/jd-take-bean.git)
-[zzdns本地DNS解析器](https://github.com/ClassmateLin/zzdns)
+- [抖音视频批量下载](https://github.com/ClassmateLin/douyin-downloader)
+- [丘大叔签到](https://github.com/ClassmateLin/uncle-qiu-sign-in)
+- [JD东东农场](https://github.com/ClassmateLin/jd-farm)
+- [JD签到领京豆](https://github.com/ClassmateLin/jd-take-bean.git)
+- [zzdns本地DNS解析器](https://github.com/ClassmateLin/zzdns)
