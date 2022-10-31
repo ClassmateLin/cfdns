@@ -28,4 +28,3 @@ port = 53
 
 [resource]
 ipv4_filepath = "conf/ip.txt"
-domain_filepath = "conf/domain.txt"
