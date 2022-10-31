@@ -33,7 +33,6 @@
 ├── cfdns
 └── conf
     ├── config.toml
-    ├── domain.txt
     └── ip.txt
 ```
 
@@ -67,4 +66,5 @@
 ## todo
 
 - [x] 支持自动判断Cloudflare CDN域名, 返回较快的IP。
+
 - [] 支持Docker.
