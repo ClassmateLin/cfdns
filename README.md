@@ -8,6 +8,15 @@
 
 ## 安装
 
+### 使用docker
+
+- 创建映射目录: `mkdir -p cfdns/conf && cd cfdns`
+- 下载配置文件: `wget https://raw.githubusercontent.com/ClassmateLin/cfdns/main/conf/config.toml -O ./conf/config.toml`
+- 下载ip地址文件: `wget https://raw.githubusercontent.com/ClassmateLin/cfdns/main/conf/ip.txt -O ./conf/ip.txt`
+- 运行容器: `docker run -itd  -e  RUST_LOG=info -v conf:/conf -p 9053:53/udp --name cfdns classmatelin/cfdns`
+- 查看运行日志: `docker logs cfdns`
+- 测试服务是否正常解析: `dig @127.0.0.1 -p 9053 www.cloudflare.com`
+
 ### 使用二进制
 
 - 下载[release](https://github.com/ClassmateLin/cfdns/releases)。
@@ -33,7 +42,6 @@
 ├── cfdns
 └── conf
     ├── config.toml
-    ├── domain.txt
     └── ip.txt
 ```
 
@@ -59,7 +67,10 @@
 ![result](./docs/imgs/result.png)
 
 
+## 其他项目
 
-## 其他
-
-- 可放在路由器中运行, 将上游服务器设置为dnsmasq/smartdns。
+- [抖音视频批量下载](https://github.com/ClassmateLin/douyin-downloader)
+- [丘大叔签到](https://github.com/ClassmateLin/uncle-qiu-sign-in)
+- [JD东东农场](https://github.com/ClassmateLin/jd-farm)
+- [JD签到领京豆](https://github.com/ClassmateLin/jd-take-bean.git)
+- [zzdns本地DNS解析器](https://github.com/ClassmateLin/zzdns)

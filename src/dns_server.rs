@@ -4,7 +4,9 @@ use bytes::{Bytes, BytesMut};
 use domain::base::iana::{Class, Rcode};
 use domain::base::{Message, MessageBuilder};
 use domain::rdata;
+use ipnet::Ipv4Net;
 use log::{debug, error, info};
+use moka::future::Cache;
 use std::net::Ipv4Addr;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::UdpSocket;
@@ -16,8 +18,9 @@ pub struct DnsServer {
     bind_sock_addr: SocketAddr,
     upstream_sock_addr: SocketAddr,
     rw_lock: Arc<RwLock<(u32, u32)>>,
+    cache: Cache<String, bool>,
     ttl: u32,
-    domain_list: Arc<Vec<String>>,
+    ipv4_net: Arc<Vec<Ipv4Net>>,
 }
 
 impl DnsServer {
@@ -25,7 +28,8 @@ impl DnsServer {
         conf: ServerConf,
         upstream_conf: UpstreamConf,
         rw_lock: Arc<RwLock<(u32, u32)>>,
-        domain_list: Vec<String>,
+        cache: Cache<String, bool>,
+        ipv4_net: Arc<Vec<Ipv4Net>>,
     ) -> Result<Arc<Self>> {
         Ok(Arc::new(Self {
             bind_sock_addr: format!("{:?}:{:?}", conf.host, conf.port).parse().unwrap(),
@@ -34,12 +38,13 @@ impl DnsServer {
                 .unwrap(),
             ttl: conf.ttl,
             rw_lock,
-            domain_list: Arc::new(domain_list),
+            cache,
+            ipv4_net,
         }))
     }
 
     // DNS 请求转发到上游DNS服务
-    async fn request_upstream(self: Arc<Self>, qbuf: &Bytes) -> Result<Bytes> {
+    async fn request_upstream(&self, qbuf: &Bytes) -> Result<Bytes> {
         let udp_addr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
         let udp_socket = UdpSocket::bind(udp_addr).await?;
 
@@ -48,17 +53,38 @@ impl DnsServer {
         udp_socket.send_to(qbuf, self.upstream_sock_addr).await?;
 
         let (len, _addr) = udp_socket.recv_from(&mut rbuf).await?;
+        
         rbuf.resize(len, 0);
-        let udp_addr = "0.0.0.0:0".parse::<SocketAddr>().unwrap();
-        let udp_socket = UdpSocket::bind(udp_addr).await?;
 
-        let mut rbuf = BytesMut::with_capacity(1024);
-        rbuf.resize(1024, 0);
-        udp_socket.send_to(qbuf, self.upstream_sock_addr).await?;
-
-        let (len, _addr) = udp_socket.recv_from(&mut rbuf).await?;
-        rbuf.resize(len, 0);
         Ok(rbuf.freeze())
+    }
+
+    async fn return_fast_ip(
+        &self,
+        client_socket: Arc<UdpSocket>,
+        src: SocketAddr,
+        qmsg: Message<&Bytes>,
+    ) -> Result<()> {
+        let question = qmsg.sole_question()?;
+        debug!(
+            "Handling DNS requests, domain:{}...",
+            question.qname().to_string()
+        );
+        let mut rmsg = MessageBuilder::from_target(BytesMut::with_capacity(1024))?
+            .start_answer(&qmsg, Rcode::NoError)?;
+        let header = rmsg.header_mut();
+        header.set_ra(true);
+
+        let data = {
+            let raw = self.rw_lock.read().await;
+            Ipv4Addr::from(raw.0)
+        };
+        rmsg.push((question.qname(), Class::In, self.ttl, rdata::A::new(data)))
+            .unwrap();
+        let _ = client_socket
+            .send_to(rmsg.into_message().as_octets(), src)
+            .await;
+        Ok(())
     }
 
     // 处理DNS请求
@@ -72,45 +98,59 @@ impl DnsServer {
         let question = qmsg.sole_question()?;
         let qtype = question.qtype();
 
-        if qtype == domain::base::Rtype::A {
-            // 域名匹配待优化
-            let has = self
-                .domain_list
-                .iter()
-                .filter(|e| e.contains(&question.qname().to_string()))
-                .count()
-                == 1;
-            if has {
-                debug!(
-                    "Handling DNS requests, domain:{}...",
-                    question.qname().to_string()
-                );
-                let mut rmsg = MessageBuilder::from_target(BytesMut::with_capacity(1024))?
-                    .start_answer(&qmsg, Rcode::NoError)?;
-                let header = rmsg.header_mut();
-                header.set_ra(true);
-
-                let data = {
-                    let raw = self.rw_lock.read().await;
-                    Ipv4Addr::from(raw.0)
-                };
-                rmsg.push((question.qname(), Class::In, self.ttl, rdata::A::new(data)))
-                    .unwrap();
-                let _ = client_socket
-                    .send_to(rmsg.into_message().as_octets(), src)
-                    .await;
-                return Ok(());
-            }
+        if qtype != domain::base::Rtype::A {
+            // 非A记录直接请求上游DNS服务器
+            let rbuf = self.request_upstream(&qbuf).await?;
+            let _ = client_socket.send_to(&rbuf, src).await;
+            return Ok(());
         }
 
-        debug!(
-            "Send DNS request to upstream server, domain:{}...",
-            question.qname().to_string()
-        );
-        // 不存在域名则请求上游服务器
+        // cdn 域名
+        let is_cache = self
+            .cache
+            .get(question.qname().to_string().as_str())
+            .is_some();
+        if is_cache {
+            self.return_fast_ip(client_socket, src, qmsg).await?;
+            return Ok(());
+        }
+
         let rbuf = self.request_upstream(&qbuf).await?;
-        let _ = client_socket.send_to(&rbuf, src).await;
+        let rmsg = Message::from_octets(rbuf)?;
+        let (_, ans, _, _) = rmsg.sections()?;
+        let mut ip = Ipv4Addr::new(127, 0, 0, 1);
+
+        for rr in ans.flatten() {
+            if rr.rtype() != domain::base::Rtype::A {
+                continue;
+            }
+            if let Ok(record) = rr.to_record::<domain::rdata::rfc1035::A>() {
+                if record.is_some() {
+                    let record = record.unwrap();
+                    ip = record.data().to_string().as_str().parse::<Ipv4Addr>()?;
+                    break;
+                }
+            }
+        }
+        let bool = self.contains(ip);
+        if bool {
+            self.cache.insert(question.qname().to_string(), true).await;
+            self.return_fast_ip(client_socket, src, qmsg).await?;
+            return Ok(());
+        }
+
+        let _ = client_socket.send_to(&rmsg.into_octets(), src).await;
+
         Ok(())
+    }
+
+    pub fn contains(&self, ip: Ipv4Addr) -> bool {
+        for item in self.ipv4_net.iter() {
+            if item.contains(&ip) {
+                return true;
+            }
+        }
+        false
     }
 
     // 服务入口

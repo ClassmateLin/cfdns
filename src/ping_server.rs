@@ -12,7 +12,7 @@ use tokio::time::{sleep, timeout, Instant};
 
 // ping 服务
 pub struct PingServer {
-    pub ipv4_net: Vec<Ipv4Net>,
+    pub ipv4_net: Arc<Vec<Ipv4Net>>,
     pub timeout: Duration,
     pub interval: Duration,
     pub port: u16,
@@ -25,7 +25,7 @@ impl PingServer {
     pub fn build(
         conf: PingerConf,
         rw_lock: Arc<RwLock<(u32, u32)>>,
-        ipv4_net: Vec<Ipv4Net>,
+        ipv4_net: Arc<Vec<Ipv4Net>>,
     ) -> Result<Arc<Self>> {
         Ok(Arc::new(Self {
             timeout: Duration::from_millis(conf.timeout),
